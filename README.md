@@ -1,3 +1,17 @@
+V.03
+Dodano
+1. Zapisywanie stanu do bazy danych
+2. połączenie z Dog API <br>
+   a. pobieranie losowego zdjęcia pieska <br>
+   b. wybór rasy pieska z breed list Dog API <br>
+   c. pobieranie nowego zdjęcia na bazie rasy <br>
+   
+![Kotlin_pieski_v3-ezgif com-optimize](https://github.com/user-attachments/assets/11f62ba4-3c38-4745-adf6-46b24737de24)
+
+
+
+
+
 V0.2
 Dodano
 1. zakładka ustawień
