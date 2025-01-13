@@ -33,7 +33,19 @@ import androidx.navigation.navArgument
 import java.util.UUID
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.MaterialTheme
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.data.local.DogEntity
+import com.example.myapplication.presentation.DogViewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.OutlinedTextField
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,11 +63,11 @@ class MainActivity : ComponentActivity() {
 }
 
 data class Dog(
-    val id: String = UUID.randomUUID().toString(), // Add unique identifier
+    val id: String = UUID.randomUUID().toString(),
     val name: String,
-    var breed: String = "",
-    var imageUrl: String = "",
-    var isFavorite: Boolean = false
+    val breed: String = "",
+    val imageUrl: String = "",
+    val isFavorite: Boolean = false
 )
 
 data class User(
@@ -107,14 +119,22 @@ fun TopBar(
 @Composable
 fun MainApp() {
     var user by remember { mutableStateOf(User()) }
-    var dogs by remember { mutableStateOf(listOf<Dog>()) }
-
     val navController = rememberNavController()
+    val viewModel: DogViewModel = hiltViewModel()
+    val dogs by viewModel.dogs.collectAsState(initial = emptyList())
 
     NavHost(navController = navController, startDestination = Screen.DogList.route) {
         composable(Screen.DogList.route) {
             DogListScreen(
-                dogs = dogs,
+                dogs = dogs.map { dogEntity ->
+                    Dog(
+                        id = dogEntity.id,
+                        name = dogEntity.name,
+                        breed = dogEntity.breed,
+                        imageUrl = dogEntity.imageUrl,
+                        isFavorite = dogEntity.isFavorite
+                    )
+                },
                 onDogClick = { dog ->
                     navController.navigate(Screen.DogDetail.createRoute(dog.id))
                 },
@@ -124,8 +144,30 @@ fun MainApp() {
                 onProfileClick = {
                     navController.navigate(Screen.Profile.route)
                 },
-                onDogsUpdate = { newDogs ->
-                    dogs = newDogs
+                onAddDog = { name, breed ->  // zmienione: dodany drugi parametr
+                    viewModel.addDog(name, breed)
+                },
+                onToggleFavorite = { dog ->
+                    viewModel.toggleFavorite(
+                        DogEntity(
+                            id = dog.id,
+                            name = dog.name,
+                            breed = dog.breed,
+                            imageUrl = dog.imageUrl,
+                            isFavorite = dog.isFavorite
+                        )
+                    )
+                },
+                onDeleteDog = { dog ->
+                    viewModel.deleteDog(
+                        DogEntity(
+                            id = dog.id,
+                            name = dog.name,
+                            breed = dog.breed,
+                            imageUrl = dog.imageUrl,
+                            isFavorite = dog.isFavorite
+                        )
+                    )
                 }
             )
         }
@@ -135,24 +177,38 @@ fun MainApp() {
             arguments = listOf(navArgument("dogId") { type = NavType.StringType })
         ) { backStackEntry ->
             val dogId = backStackEntry.arguments?.getString("dogId")
-            val dog = dogs.find { it.id == dogId }
+            val dog = dogs.find { it.id == dogId }?.let { dogEntity ->
+                Dog(
+                    id = dogEntity.id,
+                    name = dogEntity.name,
+                    breed = dogEntity.breed,
+                    imageUrl = dogEntity.imageUrl,
+                    isFavorite = dogEntity.isFavorite
+                )
+            }
             if (dog != null) {
                 DogDetailScreen(
                     dog = dog,
                     onNavigateBack = { navController.navigateUp() },
                     onDogUpdate = { updatedDog ->
-                        dogs = dogs.map { if (it.id == updatedDog.id) updatedDog else it }
+                        viewModel.insertDog(
+                            DogEntity(
+                                id = updatedDog.id,
+                                name = updatedDog.name,
+                                breed = updatedDog.breed,
+                                imageUrl = updatedDog.imageUrl,
+                                isFavorite = updatedDog.isFavorite
+                            )
+                        )
                     }
                 )
             }
         }
-
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onNavigateBack = { navController.navigateUp() }
             )
         }
-
         composable(Screen.Profile.route) {
             ProfileScreen(
                 user = user,
@@ -171,7 +227,9 @@ fun DogListScreen(
     onDogClick: (Dog) -> Unit,
     onSettingsClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onDogsUpdate: (List<Dog>) -> Unit
+    onAddDog: (String, String) -> Unit,  // zmienione: dodany drugi parametr
+    onToggleFavorite: (Dog) -> Unit,
+    onDeleteDog: (Dog) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -182,7 +240,9 @@ fun DogListScreen(
         DogListApp(
             dogs = dogs,
             onDogClick = onDogClick,
-            onDogsUpdate = onDogsUpdate
+            onAddDog = onAddDog,
+            onToggleFavorite = onToggleFavorite,
+            onDeleteDog = onDeleteDog
         )
     }
 }
@@ -191,9 +251,28 @@ fun DogListScreen(
 fun DogDetailScreen(
     dog: Dog,
     onNavigateBack: () -> Unit,
-    onDogUpdate: (Dog) -> Unit
+    onDogUpdate: (Dog) -> Unit,
+    viewModel: DogViewModel = hiltViewModel()
 ) {
     var editedDog by remember { mutableStateOf(dog) }
+    var expanded by remember { mutableStateOf(false) }
+    val breeds by viewModel.breeds.collectAsState()
+
+    // Funkcja pomocnicza do aktualizacji psa ze zdjęciem
+    fun updateDogWithNewImage(breed: String = editedDog.breed) {
+        viewModel.updateDogWithNewImage(
+            DogEntity(
+                id = editedDog.id,
+                name = editedDog.name,
+                breed = breed,
+                imageUrl = editedDog.imageUrl,
+                isFavorite = editedDog.isFavorite
+            )
+        ) { newImageUrl ->
+            editedDog = editedDog.copy(imageUrl = newImageUrl)
+            onDogUpdate(editedDog)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
@@ -215,10 +294,19 @@ fun DogDetailScreen(
                     .background(Color.LightGray)
                     .align(Alignment.CenterHorizontally)
             ) {
-                Text("🐕",
-                    modifier = Modifier.align(Alignment.Center),
-                    fontSize = 48.sp
-                )
+                if (editedDog.imageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = editedDog.imageUrl,
+                        contentDescription = "Zdjęcie psa",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Text("🐕",
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 48.sp
+                    )
+                }
             }
 
             OutlinedTextField(
@@ -231,15 +319,40 @@ fun DogDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = editedDog.breed,
-                onValueChange = {
-                    editedDog = editedDog.copy(breed = it)
-                    onDogUpdate(editedDog)
-                },
-                label = { Text("Rasa") },
+            Box(
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(editedDog.breed.ifEmpty { "Wybierz rasę" })
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    breeds.forEach { breed ->
+                        DropdownMenuItem(
+                            text = { Text(breed) },
+                            onClick = {
+                                editedDog = editedDog.copy(breed = breed)
+                                updateDogWithNewImage(breed)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            OutlinedButton(
+                onClick = { updateDogWithNewImage() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Odśwież zdjęcie")
+            }
         }
     }
 }
@@ -353,7 +466,9 @@ fun CustomSearchField(
 fun DogListApp(
     dogs: List<Dog>,
     onDogClick: (Dog) -> Unit,
-    onDogsUpdate: (List<Dog>) -> Unit
+    onAddDog: (String, String) -> Unit,
+    onToggleFavorite: (Dog) -> Unit,
+    onDeleteDog: (Dog) -> Unit
 ) {
     var searchText by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
@@ -413,7 +528,7 @@ fun DogListApp(
             IconButton(
                 onClick = {
                     if (!dogNames.contains(searchText)) {
-                        onDogsUpdate(dogs + Dog(name = searchText))
+                        onAddDog(searchText, "") // przekazujemy pustą rasę
                         dogNames.add(searchText)
                         searchText = ""
                         isError = false
@@ -458,16 +573,8 @@ fun DogListApp(
                 DogItem(
                     dog = dog,
                     gradient = purpleGradient,
-                    onFavoriteClick = {
-                        onDogsUpdate(dogs.map {
-                            if (it.id == dog.id) it.copy(isFavorite = !it.isFavorite)
-                            else it
-                        })
-                    },
-                    onDeleteClick = {
-                        onDogsUpdate(dogs.filter { it.id != dog.id })
-                        dogNames.remove(dog.name)
-                    },
+                    onFavoriteClick = { onToggleFavorite(dog) },
+                    onDeleteClick = { onDeleteDog(dog) },
                     onClick = { onDogClick(dog) }
                 )
             }
@@ -476,16 +583,8 @@ fun DogListApp(
                 DogItem(
                     dog = dog,
                     gradient = purpleGradient,
-                    onFavoriteClick = {
-                        onDogsUpdate(dogs.map {
-                            if (it.id == dog.id) it.copy(isFavorite = !it.isFavorite)
-                            else it
-                        })
-                    },
-                    onDeleteClick = {
-                        onDogsUpdate(dogs.filter { it.id != dog.id })
-                        dogNames.remove(dog.name)
-                    },
+                    onFavoriteClick = { onToggleFavorite(dog) },
+                    onDeleteClick = { onDeleteDog(dog) },
                     onClick = { onDogClick(dog) }
                 )
             }
@@ -523,11 +622,19 @@ fun DogItem(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(gradient)
-                        .padding(8.dp),
+                        .background(gradient),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🐕", fontSize = 16.sp)
+                    if (dog.imageUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = dog.imageUrl,
+                            contentDescription = "Zdjęcie psa",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text("🐕", fontSize = 16.sp)
+                    }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
