@@ -44,6 +44,8 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.OutlinedTextField
+import com.example.myapplication.presentation.VetListScreen
+import com.example.myapplication.data.local.VetEntity
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -82,6 +84,7 @@ sealed class Screen(val route: String) {
     }
     object Settings : Screen("settings")
     object Profile : Screen("profile")
+    object VetList : Screen("vetList")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -120,8 +123,8 @@ fun TopBar(
 fun MainApp() {
     var user by remember { mutableStateOf(User()) }
     val navController = rememberNavController()
-    val viewModel: DogViewModel = hiltViewModel()
-    val dogs by viewModel.dogs.collectAsState(initial = emptyList())
+    val dogViewModel: DogViewModel = hiltViewModel()
+    val dogs by dogViewModel.dogs.collectAsState(initial = emptyList())
 
     NavHost(navController = navController, startDestination = Screen.DogList.route) {
         composable(Screen.DogList.route) {
@@ -144,11 +147,11 @@ fun MainApp() {
                 onProfileClick = {
                     navController.navigate(Screen.Profile.route)
                 },
-                onAddDog = { name, breed ->  // zmienione: dodany drugi parametr
-                    viewModel.addDog(name, breed)
+                onAddDog = { name, breed ->
+                    dogViewModel.addDog(name, breed)
                 },
                 onToggleFavorite = { dog ->
-                    viewModel.toggleFavorite(
+                    dogViewModel.toggleFavorite(
                         DogEntity(
                             id = dog.id,
                             name = dog.name,
@@ -159,7 +162,7 @@ fun MainApp() {
                     )
                 },
                 onDeleteDog = { dog ->
-                    viewModel.deleteDog(
+                    dogViewModel.deleteDog(
                         DogEntity(
                             id = dog.id,
                             name = dog.name,
@@ -168,6 +171,9 @@ fun MainApp() {
                             isFavorite = dog.isFavorite
                         )
                     )
+                },
+                onVetListClick = {
+                    navController.navigate(Screen.VetList.route)
                 }
             )
         }
@@ -191,7 +197,7 @@ fun MainApp() {
                     dog = dog,
                     onNavigateBack = { navController.navigateUp() },
                     onDogUpdate = { updatedDog ->
-                        viewModel.insertDog(
+                        dogViewModel.insertDog(
                             DogEntity(
                                 id = updatedDog.id,
                                 name = updatedDog.name,
@@ -204,11 +210,13 @@ fun MainApp() {
                 )
             }
         }
+
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onNavigateBack = { navController.navigateUp() }
             )
         }
+
         composable(Screen.Profile.route) {
             ProfileScreen(
                 user = user,
@@ -218,24 +226,43 @@ fun MainApp() {
                 }
             )
         }
+
+        composable(Screen.VetList.route) {
+            VetListScreen(
+                onNavigateBack = { navController.navigateUp() }
+            )
+        }
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DogListScreen(
     dogs: List<Dog>,
     onDogClick: (Dog) -> Unit,
     onSettingsClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onAddDog: (String, String) -> Unit,  // zmienione: dodany drugi parametr
+    onAddDog: (String, String) -> Unit,
     onToggleFavorite: (Dog) -> Unit,
-    onDeleteDog: (Dog) -> Unit
+    onDeleteDog: (Dog) -> Unit,
+    onVetListClick: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
-            title = "Doggos",
-            onSettingsClick = onSettingsClick,
-            onProfileClick = onProfileClick
+        CenterAlignedTopAppBar(
+            title = { Text("Doggos") },
+            actions = {
+                IconButton(onClick = { onVetListClick() }) {
+                    Icon(Icons.Default.Person, "Weterynarze")
+                }
+                IconButton(onClick = onSettingsClick) {
+                    Icon(Icons.Default.Settings, "Settings")
+                }
+                IconButton(onClick = onProfileClick) {
+                    Icon(Icons.Default.Person, "Profile")
+                }
+            },
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
         )
         DogListApp(
             dogs = dogs,
