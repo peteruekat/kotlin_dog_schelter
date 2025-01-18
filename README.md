@@ -1,3 +1,10 @@
+V0.4<br>
+Dodano:<br>
+liste weterynarzy dla piesków (https://jsonplaceholder.typicode.com/users)<br>
+działa online / offline<br>
+![Kotlin_pieski_v4](https://github.com/user-attachments/assets/ef80faa7-84b7-48e9-ba30-44c090db3fbe)
+
+
 V.03
 Dodano
 1. Zapisywanie stanu do bazy danych
